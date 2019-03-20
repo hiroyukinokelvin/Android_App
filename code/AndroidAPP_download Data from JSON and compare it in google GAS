@@ -1,0 +1,444 @@
+Note that I delete the key for protection reasons and this key can download data from google drive GAS.
+
+package com.example.kelvin_surface.test;
+
+import android.os.AsyncTask;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Arrays;
+
+public class MainActivity extends AppCompatActivity {
+
+
+
+    TextView tsAppName,tsShow,ts00_Location_Name,ts01_PM2_5,ts02_Tem,
+            ts03_Wet,ts04_Pressure,ts05_Weather,ts_GoogleMap;
+    TextView ts_Show_Tem,ts_Show_PM2_5,ts_Show_Wet;
+    Spinner sp01_City,sp02_Town;
+
+    String  data_PM2_5  [][]=new String[77][2];
+    String  data_Tem_Wet[][]=new String[1000][5] ;
+    String  data_Result [][]=new String[77][6];
+
+    String data_Finally_Result[][]=new String[70][6];
+    String data_Full_Result[][]=new String[12][6];
+
+    String  data_Copy_PM2_5[][]=new String [77][3];
+
+    CheckBox check_PM2_5,check_Tem;
+    String str_Show=null;
+    int flag;
+    int counts;
+    String str3;
+    String str4;
+
+    int kk=0;
+    String [] str_city={"大台北","桃竹苗","中彰投","雲嘉南","高屏","花東","金馬"};
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        findView();
+
+        //PM2.5 下載
+        new TransTask()
+                .execute("http://opendata2.epa.gov.tw/AQI.json");
+        //溫溼度
+        new TransTask2()
+                .execute("http://opendata.epa.gov.tw/ws/Data/ATM00698/?%24format=json");
+
+        //DownloadGoogleSheet
+        new TransTaskDownloadJSON()
+                .execute("https://spreadsheets.google.com/feeds/list/key_for_protection/default/public/values?alt=json");
+
+
+
+
+
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,str_city);
+        sp01_City.setAdapter(adapter);
+        sp01_City.setOnItemSelectedListener(spinnerSelectedListener);
+        //String [] str_town={"基隆","松山"};
+
+    }
+    void findView(){
+        tsAppName=findViewById(R.id.ts_App_Name);
+        tsShow=findViewById(R.id.tsShow);
+        ts00_Location_Name=findViewById(R.id.ts00_location_Name);
+        ts01_PM2_5=findViewById(R.id.ts01_pm2_5);
+        ts02_Tem=findViewById(R.id.ts02_Tem);
+        ts03_Wet=findViewById(R.id.ts03_Wet);
+        ts04_Pressure=findViewById(R.id.ts04_Pressure);
+        ts05_Weather=findViewById(R.id.ts05_Weather);
+        ts_GoogleMap=findViewById(R.id.ts_Google_Map);
+
+        sp01_City=findViewById(R.id.spinner01_City);
+        sp02_Town=findViewById(R.id.spinner02_Town);
+
+        ts_Show_PM2_5=findViewById(R.id.ts_Show_PM2_5);
+        ts_Show_Tem=findViewById(R.id.ts_Show_Tem);
+        ts_Show_Wet=findViewById(R.id.ts_Show_Mos);
+
+
+        check_PM2_5=findViewById(R.id.check_PM2_5);
+        check_PM2_5.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                Toast.makeText(MainActivity.this,"PM2.5", Toast.LENGTH_SHORT).show();
+            }
+        });
+        check_Tem=findViewById(R.id.check_Tem);
+        check_Tem.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                Toast.makeText(MainActivity.this,"天氣資料", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    //sp01_City
+    AdapterView.OnItemSelectedListener spinnerSelectedListener=new AdapterView.OnItemSelectedListener() {
+        @Override
+        public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+
+            String selectedValue = (String)sp01_City.getSelectedItem();
+            //Spinner spinner2 = (Spinner) findViewById(R.id.list2);
+            //String[][] str_Town={selectedValue};
+            //String[][] str_Town={selectedValue};
+
+            //String[]  str_Town=new String[50];
+            String[]  str_Town={"花蓮"};
+            ArrayAdapter<String> adapter = new ArrayAdapter<String>(MainActivity.this,
+                    android.R.layout.simple_spinner_item, str_Town);
+            sp02_Town.setAdapter(adapter);
+            ts00_Location_Name.setText(data_Result[60][0]);
+            ts01_PM2_5.setText(data_Result[60][1]);
+            ts02_Tem.setText(data_Result[60][2]);
+            ts03_Wet.setText(data_Result[60][3]);
+            ts04_Pressure.setText(data_Result[60][4]);
+            //ts05_Weather.setText(data_Result[58][5]);
+            ts05_Weather.setText("晴".toString());
+
+        }
+
+        @Override
+        public void onNothingSelected(AdapterView<?> parent) {
+
+        }
+    };
+    //PM2.5
+    class TransTask extends AsyncTask<String, Void, String>{
+
+        @Override
+        protected String doInBackground(String... params) {
+            StringBuilder sb = new StringBuilder();
+            try {
+                URL url = new URL(params[0]);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(url.openStream()));
+                String line = in.readLine();
+                while(line!=null){
+                    Log.d("HTTP", line);
+                    sb.append(line);
+                    line = in.readLine();
+                }
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return sb.toString();
+        }//doSom
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+            Log.d("JSON", s);
+
+            try {
+                parseJSON(s);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        private void parseJSON(String s) throws JSONException {
+
+
+            JSONArray jsonObj2 = new JSONArray(s);
+
+            for(int i=0;i<=76;i++) {
+                JSONObject jsonArr = jsonObj2.getJSONObject(i);
+                data_PM2_5[i][0] = jsonArr.getString("SiteName");
+                data_PM2_5[i][1] = jsonArr.getString("PM2.5");
+            }
+            //ts_GoogleMap.setText(Arrays.deepToString(data_PM2_5));
+
+        }
+    }//Task
+
+    //溫溼度
+    class TransTask2 extends AsyncTask<String, Void, String>{
+
+        @Override
+        protected String doInBackground(String... params) {
+            StringBuilder sb = new StringBuilder();
+            try {
+                URL url = new URL(params[0]);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(url.openStream()));
+                String line = in.readLine();
+                while(line!=null){
+                    Log.d("HTTP", line);
+                    sb.append(line);
+                    line = in.readLine();
+                }
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return sb.toString();
+        }//doSom
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+            Log.d("JSON", s);
+
+            try {
+                parseJSON(s);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        private void parseJSON(String s) throws JSONException {
+
+
+            JSONArray jsonObj = new JSONArray(s);
+
+            for(int i=0;i<=999;i++){
+                JSONObject jsonArr=jsonObj.getJSONObject(i);
+                data_Tem_Wet[i][0]=jsonArr.getString("SiteName");
+
+                data_Tem_Wet[i][1]=jsonArr.getString("Temperature");
+                data_Tem_Wet[i][2]=jsonArr.getString("Moisture");
+                data_Tem_Wet[i][3]=jsonArr.getString("AtmosphericPressure");
+                data_Tem_Wet[i][4]=jsonArr.getString("Weather");
+
+
+
+            }//for
+            //ts05_Weather.setText(Arrays.deepToString(data_Tem_Wet));
+
+            //格式化
+            for(int i=0;i<=76;i++){
+                data_Result[i][0]=data_PM2_5[i][0];
+                data_Result[i][1]=data_PM2_5[i][1];
+                String str2=data_PM2_5[i][0];
+                for(int j=0;j<=999;j++){
+                    String str1=data_Tem_Wet[j][0];
+
+                    flag=str1.compareTo(str2);
+                    //if(data_Tem_Wet[j][0].equals(data_PM2_5[i][0])){
+                    if(flag==0){
+                        //
+                        //data_Result[i][0]=data_Tem_Wet[j][0];
+                        data_Result[i][2]=data_Tem_Wet[j][1];
+                        data_Result[i][3]=data_Tem_Wet[j][2];
+                        data_Result[i][4]=data_Tem_Wet[j][3];
+                        data_Result[i][5]=data_Tem_Wet[j][4];
+                    }//if
+                }//for999
+            }//for76
+
+
+            //ts05_Weather.setText(Arrays.deepToString(data_Result));
+
+            int jj=0;
+            //data_Full_Result
+            for(int j=0;j<=76;j++){
+                //data_Finally_Result
+                String str5=data_Result[j][2];
+                String str6="ND";
+                //int hooker=str5.compareTo(str6);
+                if (str5!=null){
+                    jj++;
+                    data_Full_Result[jj][0]=data_Result[j][0];
+                    data_Full_Result[jj][1]=data_Result[j][1];
+                    data_Full_Result[jj][2]=data_Result[j][2];
+                    data_Full_Result[jj][3]=data_Result[j][3];
+                    data_Full_Result[jj][4]=data_Result[j][4];
+                    data_Full_Result[jj][5]=data_Result[j][5];
+
+                }
+            }
+
+            //ts05_Weather.setText(Arrays.deepToString(data_Full_Result));
+
+
+            //轉換
+            for(int i=0;i<=15;i++){
+                data_Copy_PM2_5[i][1] =data_PM2_5[i][0];
+                data_Copy_PM2_5[i][2] =data_PM2_5[i][1];
+                data_Copy_PM2_5[i][0] ="大台北";
+            }//for15大台北
+            for(int i=61;i<=64;i++){
+                data_Copy_PM2_5[i][1] =data_PM2_5[i][0];
+                data_Copy_PM2_5[i][2] =data_PM2_5[i][1];
+                data_Copy_PM2_5[i][0] ="大台北";
+            }//for15大台北
+            for(int i=16;i<=26;i++){
+                data_Copy_PM2_5[i][1] =data_PM2_5[i][0];
+                data_Copy_PM2_5[i][2] =data_PM2_5[i][1];
+                data_Copy_PM2_5[i][0] ="桃竹苗";
+            }
+            for(int i=27;i<=35;i++){
+                data_Copy_PM2_5[i][1] =data_PM2_5[i][0];
+                data_Copy_PM2_5[i][2] =data_PM2_5[i][1];
+                data_Copy_PM2_5[i][0] ="中彰投";
+            }
+            for(int i=36;i<=44;i++){
+                data_Copy_PM2_5[i][1] =data_PM2_5[i][0];
+                data_Copy_PM2_5[i][2] =data_PM2_5[i][1];
+                data_Copy_PM2_5[i][0] ="雲嘉南";
+            }
+            for(int i=45;i<=58;i++){
+                data_Copy_PM2_5[i][1] =data_PM2_5[i][0];
+                data_Copy_PM2_5[i][2] =data_PM2_5[i][1];
+                data_Copy_PM2_5[i][0] ="高屏";
+            }
+            for(int i=70;i<=72;i++){
+                data_Copy_PM2_5[i][1] =data_PM2_5[i][0];
+                data_Copy_PM2_5[i][2] =data_PM2_5[i][1];
+                data_Copy_PM2_5[i][0] ="金馬";
+            }
+            data_Copy_PM2_5[59][1] =data_PM2_5[59][0];
+            data_Copy_PM2_5[59][2] =data_PM2_5[59][1];
+            data_Copy_PM2_5[59][0] ="花東";
+            data_Copy_PM2_5[60][1] =data_PM2_5[60][0];
+            data_Copy_PM2_5[60][2] =data_PM2_5[60][1];
+            data_Copy_PM2_5[60][0] ="花東";
+
+            data_Copy_PM2_5[73][1] =data_PM2_5[73][0];
+            data_Copy_PM2_5[73][2] =data_PM2_5[73][1];
+            data_Copy_PM2_5[73][0] ="花東";
+            data_Copy_PM2_5[67][1] =data_PM2_5[67][0];
+            data_Copy_PM2_5[67][2] =data_PM2_5[67][1];
+            data_Copy_PM2_5[67][0] ="大台北";
+            data_Copy_PM2_5[75][1] =data_PM2_5[75][0];
+            data_Copy_PM2_5[75][2] =data_PM2_5[75][1];
+            data_Copy_PM2_5[75][0] ="大台北";
+            data_Copy_PM2_5[65][1] =data_PM2_5[65][0];
+            data_Copy_PM2_5[65][2] =data_PM2_5[65][1];
+            data_Copy_PM2_5[65][0] ="桃竹苗";
+            data_Copy_PM2_5[66][1] =data_PM2_5[66][0];
+            data_Copy_PM2_5[66][2] =data_PM2_5[66][1];
+            data_Copy_PM2_5[66][0] ="中彰投";
+            data_Copy_PM2_5[69][1] =data_PM2_5[69][0];
+            data_Copy_PM2_5[69][2] =data_PM2_5[69][1];
+            data_Copy_PM2_5[69][0] ="中彰投";
+            data_Copy_PM2_5[74][1] =data_PM2_5[74][0];
+            data_Copy_PM2_5[74][2] =data_PM2_5[74][1];
+            data_Copy_PM2_5[74][0] ="雲嘉南";
+            data_Copy_PM2_5[76][1] =data_PM2_5[76][0];
+            data_Copy_PM2_5[76][2] =data_PM2_5[76][1];
+            data_Copy_PM2_5[76][0] ="雲嘉南";
+            data_Copy_PM2_5[68][1] =data_PM2_5[68][0];
+            data_Copy_PM2_5[68][2] =data_PM2_5[68][1];
+            data_Copy_PM2_5[68][0] ="高屏";
+
+            //System.out.println(Arrays.deepToString(data_Copy_PM2_5));
+            //ts05_Weather.setText(Arrays.deepToString(data_Copy_PM2_5));
+
+
+        }
+    }//Task2
+
+    //TransTaskDownloadJSON
+    class TransTaskDownloadJSON extends AsyncTask<String, Void, String>{
+
+        @Override
+        protected String doInBackground(String... params) {
+            StringBuilder sb = new StringBuilder();
+            try {
+                URL url = new URL(params[0]);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(url.openStream()));
+                String line = in.readLine();
+                while(line!=null){
+                    Log.d("HTTP", line);
+                    sb.append(line);
+                    line = in.readLine();
+                }
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return sb.toString();
+        }//doSom
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+            Log.d("JSON", s);
+
+            try {
+                parseJSON(s);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        private void parseJSON(String s) throws JSONException {
+
+
+
+
+            JSONObject jsonObj2 = new JSONObject(s);
+            JSONArray jsonArr=jsonObj2.getJSONObject("feed").getJSONArray("entry");
+            //System.out.println(jsonArr.toString());
+            //for(int i=0;i<jsonArr.length();i++){
+            //帳號
+            //JSONObject jsonObjAccount=jsonArr.getJSONObject(1).getJSONObject("gsx$帳號");//主要
+            JSONObject jsonObjAccount=jsonArr.getJSONObject(1).getJSONObject("gsx$pm2.5");
+            //System.out.println(jsonObjAccount.getString("$t"));
+            ts_Show_PM2_5.setText(jsonObjAccount.getString("$t"));
+            //密碼
+            JSONObject jsonObjPassword=jsonArr.getJSONObject(1).getJSONObject("gsx$溫度");
+            //System.out.println(jsonObjPassword.getString("$t"));
+            ts_Show_Tem.setText(jsonObjPassword.getString("$t"));
+            JSONObject jsonObjWet=jsonArr.getJSONObject(1).getJSONObject("gsx$溼度");
+            //System.out.println(jsonObjPassword.getString("$t"));
+            ts_Show_Wet.setText(jsonObjWet.getString("$t"));
+
+        }
+    }//Task
+
+
+}
